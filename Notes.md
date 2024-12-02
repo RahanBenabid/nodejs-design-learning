@@ -145,4 +145,32 @@ Summary:
 3. NodeJS architecture and components
 
 
+# The Module System In NodeJS
+Like stated before, NodeJS comes with two different module systems, CJS and ES Modules, we’re going to dive deeper into them, and answer when to use one and not the other.
+
+First off, modules are needed in a plethora of things, most notably **splitting the codebase**, to make the code more organized, and making it independent and easier to maintain, code reuse is also helpful, features can be reused across different projects, implementation complexity is hidden, you only have clear responsiblities and interfaces, and of course, most notably, is the dependecy management.
+
+There is a difference between a module and a module system, the module is the unit of the software, and the latter is syntax and tooling that allow us to define and use it.
+
+Before node, there was no mudule system, and instead, people just imported the JavaScript code using the `<script/>` tag, but as the web became more complex, it was no longer a good option, the idea was not to rely on the HTML tag, instead, it was to rely on purely JavaScript and files available in the local filesystem. This is where *CommmonJS* comes to play, its goal was to provide a module system in a **serverless environment**.
+It was the standard for years until *ESM* came along, and provided several innovative ideas, and as the years pass, it is more and more likely for it to become the standard instead of *CommonJS*. 
+So while learning CJS is fine, it’s better to focus in ESM from now on.
+
+Some issues with JavaScript is the lack of namespaces, every script runs on the global scope, like imagine, a third party library instantiates a variable called `utils`, this will cause a crash in case any other library or the app code overrides it.
+
+To avoid that we use a technique called the *revealing module pattern*, seen in the repo code in `/chapter2`, which uses **IIFE** to ceate a private scope, and exports the only parts that are meant to be public.
+In here the `myModule` variable contains only the exported API, and the rest of it is inaccessible from the outside. from seeing the log:
+
+```sh
+{ publicFoo: [Function: publicFoo],
+	publicBar: [Function: publicBar] }
+undefined undefined
+```
+
+we understand that only the exported properties are directly accessible.
+
+### More About CommmonJS
+Built originally into NodeJS, it has CommonJS specification:
+- the `require` function, it allows you to import moducles from the local filesystem
+- the `exports` and `module.exports` that are used to export public functionalities from the current module
 
