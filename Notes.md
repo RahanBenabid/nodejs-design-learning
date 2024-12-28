@@ -1,4 +1,5 @@
 # My Personal About NodeJS, Feel Free To Read
+These are my personal notes, but since the repo is public, I have considered the one in a bajillionth chance that someone might want to read this, and made the notes as understandable as possible.
 
 # Some NodeJS Talk Before We Really Start
 This will cover some aspects of I/O operations in general, and how NodeJS relates to everything.
@@ -144,7 +145,7 @@ Summary:
 2. different I/O handling Reactor pattern
 3. NodeJS architecture and components
 
-
+# Chapter 2
 # The Module System In NodeJS
 Like stated before, NodeJS comes with two different module systems, CJS and ES Modules, we’re going to dive deeper into them, and answer when to use one and not the other.
 
@@ -173,4 +174,63 @@ we understand that only the exported properties are directly accessible.
 Built originally into NodeJS, it has CommonJS specification:
 - the `require` function, it allows you to import moducles from the local filesystem
 - the `exports` and `module.exports` that are used to export public functionalities from the current module
+
+### the require function:
+here is a simple step by step on how the `require()` function in node genreally works:
+1. we accept a module as a parameter, we resolve the full path of that module, we’ll call that the `id`.
+2. if it was already loaded in the past, then it should be available in the cache, so we return in immediately
+3. if it hasn’t been loaded yet, we setup the environment for the first load, by that, we create a `module` object that contains an `exports` property initilized with an empty object literal, which will be populated by the code of the module ti export its **Public API**
+4. then we cache the module after the load
+5. we read the module source code from its file and evaluate the code
+6. the content of the `module.exports`, which represents the public API of the module, is returned…
+
+It’s important to remember that everything inside a function is private untill it’s assigned to the `module.exports` variable, which is a special varialble. The content of this varible is cached and then returned when the module is loaded using the `require()`.
+
+## `module.exports` vs `exports`
+I’ve met these two a lot, but don’t really know the difference, both are used to *expose* a public API.
+
+> we use `module.exports` when there is only *one item* we need to export, and `exports` is used for many exports.
+
+The `module` is a plain JS object representing the current module, it’s local to each to each module and it’s also *private*.
+
+If we want to export a single *class/variable/function* from one module to another, we use `module.exports`
+
+for example:
+
+```js
+// EXPORT
+class RandomClass {
+	constructor() {}
+	
+	method() { return something }
+}
+
+module.exports = RandomClass
+
+// IMPORT
+const RandomClass = require("./myclass.js")
+```
+
+meanwhile here is how we use the `exports`:
+
+```js
+// EXPORT
+exports.add = (a, b) => a + b;
+exports.subtract = (a, b) => a - b;
+exports.multiply = (a, b) => a * b;
+
+// IMPORT
+const Arithmetic = require("./calculator.js");
+
+console.log(`Addition -> ${Arithmetic.add(100, 40)}`);
+console.log(`subtraction -> ${Arithmetic.subtract(100, 40)}`);
+```
+
+Reassigning the exports variable doesn’t have any effect because it doesn’t change the content of `module.exports` it will only reassign the variable itself. So the following code won’t work
+
+```js
+exports = () => {
+	console.log("hello");
+}
+```
 
