@@ -170,7 +170,7 @@ undefined undefined
 
 we understand that only the exported properties are directly accessible.
 
-### More About CommmonJS
+## More About CommmonJS
 Built originally into NodeJS, it has CommonJS specification:
 - the `require` function, it allows you to import moducles from the local filesystem
 - the `exports` and `module.exports` that are used to export public functionalities from the current module
@@ -205,7 +205,7 @@ class RandomClass {
 	method() { return something }
 }
 
-module.exports = RandomClass
+module.exports = RandomClass;
 
 // IMPORT
 const RandomClass = require("./myclass.js")
@@ -234,3 +234,342 @@ exports = () => {
 }
 ```
 
+One thing to note is that the `require` function is *synchronous*, it only returns the module contents directly without using any callback. So any issignments to it must be synchronous…
+
+## How NodeJS Searches Your Packages
+Here is how Node resolves imports using its algorithm:
+- if the `moduleName` inside the `require` starts with `/`, then it’s aready considered an obsolute path, while `./` is considered a relative path
+- if it’s not prefixed with `/` then node will try looking in its **core Node.js modules**, the pre-installed node modules
+- if there is mo match, then it will start looking inside the `/node_modules` directory in the root of the project, if there is no match still, it will still try to match into the next `/node_modules` until it reaches the root of the filesystem
+
+here is what the algorithm tries to match specifically:
+- `<module_name>.js`
+- `<module_name>/index.js`
+- the file specified inside `<module_name>/package.json`
+
+[here are the full details of the resolve algorithms](nodejsdp.link/resolve)
+
+each package inside the `/node_modules` have its own dependency, so we end up with a dependency tree that looks like this:
+
+```
+myApp
+├── foo.js
+└── node_modules
+    ├── depA
+    │   └── index.js
+    ├── depB
+    │   ├── bar.js
+    │   └── node_modules
+    │       └── depA
+    │           └── index.js
+    └── depC
+        ├── foobar.js
+        └── node_modules
+            └── depA
+                └── index.js
+```
+
+in this example, calling `require('depA')` from `/myApp/node_modules/depB/bar.js`, `/myApp/foo.js` and `/myApp/node_modules/depC/foobar.js` will have a different impact each time and will load a different file. This is the trick that lets us avoid *dependency hell* and *collision*, and makes for a great (although bloated) dependency management.
+
+There is also the cache implementation, each module is only loaded once, and then another `require` call will return the cached version of it, it is crucial for performance.
+
+## Circular Dependencies
+look at this code:
+
+```js
+// module a
+exports.loaded = false
+const b = require('./b')
+module.exports = {
+	b,
+	loaded: true,
+}
+
+// module b
+exports.loaded = false
+const a = require('./a')
+module.exports = {
+	a,
+	loaded: true,
+}
+
+// main.js
+const a = require('./a')
+const b = require('./b')
+console.log('a ->', JSON.stringify(a, null, 2))
+console.log('b ->', JSON.stringify(b, null, 2))
+```
+
+`main.js` requires `a.js` and `b.js`. In turn, `a.js` requires `b.js` But `b.js` relies on `a.js`
+This is the result output:
+
+```json
+a -> {
+    "b": {
+        "a": {
+            "loaded": false
+        },
+        "loaded": true
+    },
+    "loaded": true
+}
+
+b -> {
+    "a": {
+        "loaded": false
+    },
+    "loaded": true
+}
+```
+
+So the issue here in practice is that different part of the app will have different view of what is being exported.
+
+## Exporting Modules
+The main uses for the module system is to load dependencies, and define APIs, so there should be a balance between private and public functionalities, in other words maximize information hiding and API usability.
+
+Named exports are done by tagging an object we want to make public with the `exports` keyword (or `module.exports`)
+
+```js
+// EXPORTS (logger.js)
+exports.info = (message) => {
+	console.log(`info: ${message}`)
+}
+exports.verbose = (message) => {
+	console.log(`verbose: ${message}`)
+}
+
+// IMPORTS
+const logger = require('./logger')
+logger.info('This is an informational message')
+logger.verbose('This is a verbose message')
+```
+
+One popular design patter is assigning `module.exports` variable to a function, it honors the principle of *small surface*, here is an example
+
+```js
+// EXPORTS
+module.exports = (message) => {
+	console.log(`info: ${message}`)
+}
+
+module.exports.verbose = (message) => {
+	console.log(`verbose: ${message}`)
+}
+
+// IMPORTS
+const logger = require('./logger')
+logger('This is an informational message')
+logger.verbose('This is a verbose message')
+```
+
+Node.js heavily emphasises on the **SRP**, *single-reponsability-principle*, where every module should have responsability over a single functionality that should be encapsulated by this module.
+
+Exporting **Classes** is also a greate way to have extensible code:
+
+```js
+// EXPORT
+class Logger {
+	constructor (name) {
+		this.name = name
+	}
+	log (message) {
+		console.log(`[${this.name}] ${message}`)
+	}
+	info (message) {
+		this.log(`info: ${message}`)
+	}
+	verbose (message) {
+		this.log(`verbose: ${message}`)
+	}
+}
+module.exports = Logger
+
+// IMPORT
+const Logger = require('./logger')
+const dbLogger = new Logger("db")
+dbLogger.info('This is an informational message')
+const accessLogger = new Logger('ACCESS')
+accessLogger.verbose('This is a verbose message')
+```
+
+This allows to extend its prototype and create new classes, however in this case, it exposes a lot more of the module interns, but is more powerful when it comes to extensability.
+
+We can also export an instance of the class:
+
+```js
+// file logger.js
+class Logger {
+	constructor (name) {
+		this.count = 0
+		this.name = name
+	}
+	log (message) {
+		this.count++
+		console.log('[' + this.name + '] ' + message)
+	}
+}
+module.exports = new Logger('DEFAULT')
+
+// main.js
+const logger = require('./logger')
+logger.log('This is an informational message')
+```
+
+so all the imports will use the same instance of this object, which creates a ***singleton***, which helps caching the instance, even tho **it is not** garanteed to be unique across the whole app.
+
+However this does not mean we can create a **new instance**, we can use the constructor just fine
+
+```js
+const customLogger = new logger.constructor('CUSTOM')
+```
+
+It is not recommended however.
+
+We can also patch an existing module and add functionalities to it, which is both dangerous and not recommended…
+
+```js
+// inside patcher.js
+require('./logger').customAddition = function () {
+	console.log('i just added this haha cry about it')
+}
+
+// inside main.js
+require('./patcher.js')
+const logger = require('./logger')
+logger.customAddition()
+```
+
+## ESM
+after seeing CommonJS, it’s time to take a look at ESM, first off by telling Node.js we will be using it either by:
+- giving the filename a `.mjs` extension
+- in the `package.json`, create a field with the key value: `"type": "module"`
+
+Now everything will be private by default, and only exported stuff is publicly accesssible.
+
+```js
+// EXPORTS
+// Exports a function as `log`
+export function log(message) {
+    console.log(message);
+}
+
+// Exports a constant as `DEFAULT_LEVEL`
+export const DEFAULT_LEVEL = 'info';
+
+// Exports an object as `LEVELS`
+export const LEVELS = {
+    error: 0,
+    debug: 1,
+    warn: 2,
+    data: 3,
+    info: 4,
+    verbose: 5
+};
+
+// Exports a class as `Logger`
+export class Logger {
+    constructor(name) {
+        this.name = name;
+    }
+
+    log(message) {
+        console.log(`[${this.name}] ${message}`);
+    }
+}
+
+// IMPORTS
+imoprt * as loggerModule from './logger.js'
+console.log(loggerModule)
+
+// OUTPUT
+[Module] {
+	DEFAULT_LEVEL: 'info',
+	LEVELS: { error: 0, debug: 1, warn: 2, data: 3, info: 4,
+		verbose: 5 },
+	Logger: [Function: Logger],
+	log: [Function: log]
+}
+```
+
+the `import` syntax is pretty flexible, it allows for multiple imports and renaming, we can also pick what we want to import:
+
+```js
+import { log }
+```
+
+> note that we **need** to specify the *file extension* of the imported modules
+
+make sure to not mix thigns up
+
+```js
+import { log, Logger } from './logger.js'
+log('Hello World')
+const logger = new Logger('DEFAULT')
+logger.log('Hello world')
+```
+
+## Export Default
+To follow the SRP CommonJS uses using `module.exports`, we have something that works similiarly, it’s called *default export*, it uses the `default` keyword to look like this:
+
+```js
+export default class Logger {
+	constructor (name) {
+		this.name = name
+	}
+	
+	log (message) {
+		console.log(`[${this.name}] ${message}`)
+	}
+}
+```
+
+the `Logger` keyword is ignored in here, it is instead registered under the name `default`, and we import it as such:
+
+```js
+import MyLogger from "./logger.js"
+// use it here
+```
+
+The difference here is that since the name is default, we can give it the name of our choice, it could very well be like this
+
+```js
+import viagra from "./logger.js"
+```
+
+> also don’t forget the file extension…
+however the `default` keyword is reserved and cannot be used for import, it is a reserved keyword and cannot be used for naming variables.
+
+```js
+import { default } from "./logger.js"
+```
+
+here is an example that uses both exports and imports at the same time:
+
+```js
+// EXPORTS
+export default function log (message) {
+	console.log(message)
+}
+export function info (message) {
+	console.log(`info: ${message}`)
+}
+
+// IMPORTS
+import defaultLoggerNamedAnything, { info } from "./logger.js"
+```
+
+The adavantages of the named exports, is for example, IDE support, when writing `writeFileSync`, the IDE would automatically import `import { writeFileSync } from "fs";` at the top of the file, knowing there is only one `writeFileSync`, while the default export makes things a little more tricky…
+
+It would be more useful in cases where it would be obvious what the user is going to import, what the functionality will be without caring too mucj about the naming.
+
+So it is generally **good practice** to stick to **named exports**, especially when exposing more than one functionality.
+This is not written on stone tho, even core node modules have both default and named exports.
+
+we can use *module indetifiers* to specify our imports, here are all of them
+- Relative specifiers like `./logger.js` or `../logger.js`. They are used to refer to a path relative to the location of the importing file.
+- Absolute specifiers like `file:///opt/nodejs/config.js`. They refer directly and explicitly to a full path. Note that this is the only way with ESM to refer to an absolute path for a module, using a / or a // prefix won't work. This is a significant difference with CommonJS.
+- Bare specifiers are identifiers like `fastify` or `http`, and they represent modules available in the `node_modules` folder and generally installed through a package manager (such as npm) or available as *core Node.js modules*.
+- Deep import specifiers like `fastify/lib/logger.js`, which refer to a path within a package in `node_modules` (fastify, in this case).
+
+## Async
+since we have limitations of not being able to nest imports inside tests and flow statements, and they must be declared at the top of every file, we can overcome these challenges using **async imports**, since, like seen before, the `import()` function is equivalent to a function that takes a module ID and returns a promise that resolves the module whole object
