@@ -3,6 +3,10 @@
 FILE="package.json"
 if [ -e "$FILE" ]; then
   echo "file exists..."
+  node script.js en
+  node script.js pl
+  node script.js it
+  node script.js fr
 else
   npm init -y
   

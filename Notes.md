@@ -75,34 +75,39 @@ while (events = demulteplexer.watch(watchedList)) {
 The program continuously checks for events, reads data when available, handles closed resources appropriately, and processes any received data.
 Now using this pattern, we can handle several I/O operations inside a single thread, unlike the *Busy-Waiting* technique that uses a a thread for each I/O. So here, using a single thread, we can be effiecient when dealing with multiple resources, since the tasks are spread over time.
 
-```
-Connection A, B, C
-       |
-       v
-    +--------+
-    | Server |
-    +--------+
-       |
-       v
-+-------------------------------------+
-|          Thread                     |
-|   +-----------------------------+   |
-|   |  Idle Time                  |   |
-|   +-----------------------------+   |
-|   |  Handle Data from A         |   |
-|   +-----------------------------+   |
-|   |  Idle Time                  |   |
-|   +-----------------------------+   |
-|   |  Handle Data from B         |   |
-|   +-----------------------------+   |
-|   |  Idle Time                  |   |
-|   +-----------------------------+   |
-|   |  Handle Data from C         |   |
-|   +-----------------------------+   |
-|   |  Idle Time                  |   |
-|   +-----------------------------+   |
-|                                     |
-+-------------------------------------+
+```txt
+          ┌───────────────┐          
+          │ Connection A, │          
+          │     B, C      │          
+          └───────┬───────┘          
+                  │                  
+                  │                  
+                  │                  
+                  ▼                  
+             ┌─────────┐             
+             │ Server  │             
+             └────┬────┘             
+                  │                  
+                  ▼                  
+┌───────────────────────────────────┐
+│              Thread               │
+│  +-----------------------------+  │
+│  |  Idle Time                  |  │
+│  +-----------------------------+  │
+│  |  Handle Data from A         |  │
+│  +-----------------------------+  │
+│  |  Idle Time                  |  │
+│  +-----------------------------+  │
+│  |  Handle Data from B         |  │
+│  +-----------------------------+  │
+│  |  Idle Time                  |  │
+│  +-----------------------------+  │
+│  |  Handle Data from C         |  │
+│  +-----------------------------+  │
+│  |  Idle Time                  |  │
+│  +-----------------------------+  │
+│                                   │
+└───────────────────────────────────┘
 ```
 
 instead of being spead over multiple threads, the data is spread over time.
@@ -303,7 +308,7 @@ console.log('b ->', JSON.stringify(b, null, 2))
 `main.js` requires `a.js` and `b.js`. In turn, `a.js` requires `b.js` But `b.js` relies on `a.js`
 This is the result output:
 
-```json
+```
 a -> {
     "b": {
         "a": {
@@ -571,5 +576,129 @@ we can use *module indetifiers* to specify our imports, here are all of them
 - Bare specifiers are identifiers like `fastify` or `http`, and they represent modules available in the `node_modules` folder and generally installed through a package manager (such as npm) or available as *core Node.js modules*.
 - Deep import specifiers like `fastify/lib/logger.js`, which refer to a path within a package in `node_modules` (fastify, in this case).
 
-## Async
-since we have limitations of not being able to nest imports inside tests and flow statements, and they must be declared at the top of every file, we can overcome these challenges using **async imports**, since, like seen before, the `import()` function is equivalent to a function that takes a module ID and returns a promise that resolves the module whole object
+## Async/Dynamic Imports
+since we have limitations of not being able to nest imports inside tests and flow statements, and they must be declared at the top of every file, we can overcome these challenges using **async imports**, since, like seen before, the `import()` function is equivalent to a function that takes a module ID and returns a promise that resolves the module whole object.
+
+Now look up the code [here](./chapter2/03-dynamic-import/script.js), more importanly the second part, after handling the edge case, that is how dynamic imports work, there are a couple things to note about it:
+- we dynamically build the name of the module we want to import
+- the path to the module needs to be a relative path
+- this time we use `import()` to import the module dynamically
+- the import happens **asynchronously**, so we should use the `.then()` to execute the code after it has been fully imported and loaded, and starts executing when it gets notified about the promise return
+- the module *namespace* will be whatever we put inside the `.then()`, in this case `strings`, so we can access whatever is inside the module, inside ours we have exported the `HELLO` property, so we can access it using `strings.HELLO`
+
+here is an example on how you import an installed (either core node.js or installed using npm) module
+
+```js
+const condition = true; // Change this to false to import 'fs'
+
+(async () => {
+  const module = condition ? await import('http') : await import('fs');
+  
+  console.log(`Imported module: ${condition ? 'http' : 'fs'}`);
+  console.log(module);
+})();
+```
+
+## Parsing
+This is a pretty superficial explanation on how the `node` interpreter works… First off it genreates a ‌*dependency graph* to be able to figure out what modules are imported, and in what order the code needs to be executed, it gets passed some code and the first one to be executed is called the **entry point**, it will then *recursively* follow the imports in a **depth-first style** until all the code necessary is imported, here is the process:
+1. constructing and parsing: find all the imports and recuresively load all the neceassary modules content
+2. instantiation: for every imported entity, keep a named reference in memeory **wihtout value** yet, no JS code has been executed at this point
+3. executing the code: now the entities instantiated before will get a √alue
+
+The difference with CommonJS here is thanks to the dynamic nature of CommonJS, it will execute all the files while the dependency graph is explored, since we have seen that when a new `require` is found, all the previous code has already been executed, so you can use `require` even inside if statements.
+
+In ESM, the three phases seen before are totally seperate, and no code is executed until the whole dependency graph has been loaded.
+
+Thing to note is that ES modules are *read-only* live bindings, if we have a module like this:
+
+```js
+export let count = 0
+export function increment () {
+	count++
+}
+```
+
+when importing this from another module, we can increment the count variable using `increment()` function, but not using `count++`, this will cause a `TypeError: Assignment to constant variable`, as if we were trying to increment a constant variable, [here](./chapter2/03-dynamic-import/live_binding.js) is a better example to illustrate things…
+
+Now let’s go back to circular dependencies, here we have the same cycle as the ones in CommonJS:
+
+```js
+// a.js
+import * as bModule from './b.js'
+export let loaded = false
+export const b = bModule
+loaded = true
+
+// b.js
+import * as aModule from './a.js'
+export let loaded = false
+export const a = aModule
+loaded = true
+
+// main.js
+import * as a from './a.js'
+import * as b from './b.js'
+console.log('a ->', a)
+console.log('b ->', b)
+```
+
+it will result in this output
+
+```
+a -> <ref *1> [Module] {
+	b: [Module] { a: [Circular *1], loaded: true },
+	loaded: true
+}
+b -> <ref *1> [Module] {
+	a: [Module] { b: [Circular *1], loaded: true },
+	loaded: true
+}
+```
+
+The difference here is that both `a` and `b` hold a complete picture of each other, thanks to three steps when executing a project in `node`, as ‌`b` here inside `a` is a reference to the same `b` inside the current scope, same for `a` within b… Here are the steps:
+
+1. From `main.js`, **the first import found leads us straight** into `a.js`.
+2. In `a.js` we find an import pointing to `b.js`.
+3. In `b.js`, we also have an import back to `a.js` (our cycle), but since `a.js` has already been visited, this path is not explored again.
+4. we go back to ‌`b.js` but it doesn’t have other imports, we go back to `a.js` and it also does not have any other imports, so when going back to `main.js`, we find another reference to `b.js` that won’t be explored, so it is *ignored*, so the graph end up being a linear module.
+
+```
+┌─────────────┐        ┌─────────────┐        ┌─────────────┐
+│             │        │             │        │             │
+│   main.js   ├───────▶│    a.js     ├───────▶│    b.js     │
+│             │        │             │        │             │
+└─────────────┘        └─────────────┘        └─────────────┘
+```
+
+In the second phase, the instantiation, the interpreter will walk thought hte tree view we built just now starting from `main.js`, and and for every module, it will look for all the exported properties first then build a *map* out of the exported names in memory.
+
+In the intantiation, the module will start from `b.js`, it then discovers that it exports `loaded` and ‌`a`. Then it moved to `a.js`, which exports `loaded` and `b.js`, then moves to `main.js` which does not have any exports.
+
+In this step, the exports map will only keep track of the exported names and not their values, it has not been initialized yet… So here before the evaluation we have:
+- `b.js` linking the exports from `a.js`, referring to them as `aModule`
+- `a.js` linking the exports from `b.js`, referring to them as `bModule`
+- ‌ `main.js` will import all the exports in `b.js`, referring to them as `b`, similarly, it will import everything from `a.js`, referring to them as `a`.
+
+Now in the *evaluation* phase, the most important part is the execution order, it will be **bottom-up** respecting the post-order depth-first visit of our original dependency graph, so to be clear… `main.js` will be the *last* to execute.
+
+## Modify Modules
+like seen before, if we reassign a value to a variable of another module, it will give us a `TypeError`, because of *read-only bindings*, but if one of the bindings is an *object*, we can reassign some of the object’s properties. [here](./chapter2/03-dynamic-import/reassign.js) is an example.
+
+In the example code, the output will be:
+
+```
+[ 'path', 'options', 'callback' ]
+[ 'path', 'cb' ]
+[ 'path', 'options', 'callback' ]
+```
+
+there is another [code](./chapter2/03-dynamic-import/mock-test.js) that tests the implementation, however… this code implementation is not recommended and is very **fragile**.
+
+## Differences
+here are some last differences between ESM and CommonJS…
+- file extension are required in ESM but optional in CommonJS
+- ESM runs on strict mode, it **cannot** be disabled, so we cannot do things such as use undeclared variables, use the `with` statement, or other features related to non-strict mode…
+- in ESM, there are some unavailable references such as `require`, `exports`, `module.exports`, `__filename`, `__dirname`, you will get a `ReferenceError`. instead we should use `‌import.meta.url` for the `__filename`, and `dirname(import.meta.url)` for getting the current folder. There is also a method to recreate the `require` function…
+- `this` keyword in CommonJS us a reference to `exports`, but in ESM, `this` is undefined
+- in ESM, we cannot import JSON files directly like in CommonJS, this `import data from './data.json'` will cause an error
+- we can import CommonJS modules from ESM, but this is limited to default exports
