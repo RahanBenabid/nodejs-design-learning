@@ -1,4 +1,4 @@
-# My Personal About NodeJS, Feel Free To Read
+# My Personal Notes About NodeJS, Feel Free To Read
 These are my personal notes, but since the repo is public, I have considered the one in a bajillionth chance that someone might want to read this, and made the notes as understandable as possible.
 
 # Some NodeJS Talk Before We Really Start
@@ -111,6 +111,15 @@ Now using this pattern, we can handle several I/O operations inside a single thr
 ```
 
 instead of being spead over multiple threads, the data is spread over time.
+
+The **Reactor Pattern** is a fundamental part of Node.js’ asynchronous, event-driven architecture. It is responsible for handling I/O operations efficiently using an event loop.
+
+How the Reactor Pattern Works in Node.js:
+	1.	Event Demultiplexer (libuv): It listens for I/O events (network requests, file operations, timers).
+	2.	Event Queue: Incoming requests (events) are placed in a queue.
+	3.	Event Loop: The loop continuously checks the queue and dispatches events to corresponding callback functions.
+	4.	Worker Threads (when needed): If a task is CPU-intensive, it may be offloaded to a worker thread.
+	5.	Callback Execution: Once an operation is completed, its callback is executed.
 
 Meanwhile, there is the more advanced *Reactor Pattern*, which takes advantage of handlers associated with each I/O, those handlers being a callback in NodeJS. Here is the loop being followed by this pattern:
 1. the app generates a new I/O operation, it submits a request to the **Event Demultiplexer** (Resource, Operation, Handler), and it specifies the handler (it will be invoked when the operation completes), this is a non-blocking call and it instantly returns control to the app
@@ -542,6 +551,7 @@ import viagra from "./logger.js"
 ```
 
 > also don’t forget the file extension…
+
 however the `default` keyword is reserved and cannot be used for import, it is a reserved keyword and cannot be used for naming variables.
 
 ```js
@@ -702,3 +712,60 @@ here are some last differences between ESM and CommonJS…
 - `this` keyword in CommonJS us a reference to `exports`, but in ESM, `this` is undefined
 - in ESM, we cannot import JSON files directly like in CommonJS, this `import data from './data.json'` will cause an error
 - we can import CommonJS modules from ESM, but this is limited to default exports
+
+# Chapter 3
+Let’s define asynchronous programming, before starting, when talking about synchrouns code, we know each line of that code is blocking, which means it cannot execute the next line/command until the current one is completed… meanwhile, asynchronous code is *launched and executed in the background*, until it is resolved or rejected, examples could be things such as reading from a file or berforming a network request, or maybe performing a database query… things that would require a little bit of time, but we need to get notified when it has executed and completed. The most basic way to implement that is using **callbacks**, since without these, **we would not have promises, or `async` `await`**, which are a more elegant way of dealing with asynchronous operations.
+
+## Callbacks
+A callback is a function invoked to propagate the result of an operation… They replace the role of the `return` inscruction, which always executes synchronously, another good construct for implementing callbacks are closures, more info [here](nodejsdp.link/mdn-closures)…
+
+So a callback is a function that is passed as an argument to another function, and it is invoked once the operation is finished. In functional programming, this this called *coninuation-passing style*.
+
+This simply means that the result is propagated by assing it to another function (in this case, the callback), instead of directly returning it to the caller.
+
+here is a more practical example:
+
+```js
+// simple synchronous function
+function add (a, b) {
+	return a + b
+}
+
+// CPS equivalent
+function addCps (a, b, callback) {
+	callback(a + b)
+}
+```
+
+the `addCps` function is synchronous, because it will complete only when the callback completes, here is an asynchronous CPS example:
+
+```js
+function additionAsync (a, b, callback) {
+	setTimeout(() => callback(a, b), 100)
+}
+```
+
+here, we used `setTimeout` to simulate an async call, now if we make a call like this
+
+```js
+console.log('before')
+additionAsync(1, 2, result => console.log(`Result: ${result}`))
+console.log('after')
+
+// OUTPUT
+before
+after
+Result: 3
+```
+
+So in here, since `setTimeout` is an async operation, it does not wait for the callback to be executed, instead it returns.
+
+So inside the async function, when the async opration is complete, its execution is then resumed, starting from the callback that caused the unwinding.
+
+To make things easier:
+- a synchronous function just executes while blocking until it finishes
+- a async function returns immediately, its result is passed to a *handler*, in this case, a callback, at a later cycle of the event loop.
+
+## Real Life Applications
+A very dangerous situation to have irl is a function that would behave *synchronously* under certain conditions and *asynchronously* under others. inside and `if else` block for example, look at [this](./chapter3/unpredictable.js) code as an instance
+
