@@ -1,3 +1,7 @@
+/*
+* This code will not work, it's just a senmi practical example
+*/
+
 function createFileReader (filename) {
 	const listeners = []
 	inconsistentRead(filename, value => {
@@ -9,7 +13,7 @@ function createFileReader (filename) {
 	}
 }
 
-const reader1 = createFileReader('data.txt')
+console.log(reader1)
 reader1.onDataReady(data => {
 	console.log(`First call data: ${data}`)
 	

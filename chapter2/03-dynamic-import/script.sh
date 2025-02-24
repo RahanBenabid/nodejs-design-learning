@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env bash
+
+set -euo pipefail
 
 FILE="package.json"
 if [ -e "$FILE" ]; then

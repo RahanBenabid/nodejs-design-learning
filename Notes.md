@@ -714,7 +714,7 @@ here are some last differences between ESM and CommonJS…
 - we can import CommonJS modules from ESM, but this is limited to default exports
 
 # Chapter 3
-Let’s define asynchronous programming, before starting, when talking about synchrouns code, we know each line of that code is blocking, which means it cannot execute the next line/command until the current one is completed… meanwhile, asynchronous code is *launched and executed in the background*, until it is resolved or rejected, examples could be things such as reading from a file or berforming a network request, or maybe performing a database query… things that would require a little bit of time, but we need to get notified when it has executed and completed. The most basic way to implement that is using **callbacks**, since without these, **we would not have promises, or `async` `await`**, which are a more elegant way of dealing with asynchronous operations.
+Let’s define asynchronous programming, before starting, when talking about synchrouns code, we know each line of that code is blocking, which means it cannot execute the next line/command until the current one is completed… meanwhile, asynchronous code is *launched and executed in the background*, until it is resolved or rejected, examples could be things such as reading from a file or performing a network request, or maybe performing a database query… things that would require a little bit of time, but we need to get notified when it has executed and completed. The most basic way to implement that is using **callbacks**, since without these, **we would not have promises, or `async` `await`**, which are a more elegant way of dealing with asynchronous operations.
 
 ## Callbacks
 A callback is a function invoked to propagate the result of an operation… They replace the role of the `return` inscruction, which always executes synchronously, another good construct for implementing callbacks are closures, more info [here](nodejsdp.link/mdn-closures)…
@@ -767,5 +767,55 @@ To make things easier:
 - a async function returns immediately, its result is passed to a *handler*, in this case, a callback, at a later cycle of the event loop.
 
 ## Real Life Applications
-A very dangerous situation to have irl is a function that would behave *synchronously* under certain conditions and *asynchronously* under others. inside and `if else` block for example, look at [this](./chapter3/unpredictable.js) code as an instance
+A very dangerous situation to have irl is a function that would behave *synchronously* under certain conditions and *asynchronously* under others. inside and `if else` block for example, look at [this](./chapter3/unpredictable.js) code as an instance.
+
+Now to get rid of these issue, there are a couple fixes, like explicitely making the code synchornous, this is possible because node.js provides a * direct style synchronous counterpart* for most of the basic I/O programs, such as `fs.readFileSync()`, you need to keep these in mind:
+- there might not be a synchronous countrerpart for all/most the available functions
+- a synchronous API will block all the event loop, which would brick the app in case it does not resolve fast
+
+> using synchronous I/O in node.is is **strongly discouraged** in most situations, so Use blocking APIs sparingly and only when they don't affect the ability of the application to handle concurrent asynchronous operations.
+
+The other solution is ofc to make all the functionality asynchronous, the suggested 
+
+> You can guarantee that a callback is invoked asynchronously by deferring its execution using `process.nextTick()`
+
+## Callback Conventions & Best Practices
+- callback comes last in parameters, even in the presence of optional parameteres, for example `‌readFile(filename, [options], callback)`, this is made so that the function call will be more readable
+- error always come first, here is an example:
+
+```js
+readFile('file.txt', 'utf-8', (err, data) => {
+	if (err) {
+		handleError(err)
+	} else {
+		processData(err)
+	}
+})
+```
+
+- it best to always check for error, to make things easier to manage, also it is best to make sure the error must be of type `Error`, so things such as strings and numbers shouldn’t be passed as error objects.
+- propagate the error, do not return it or throw it, just use the callback as if it was any other result, practical example [here](./chapter3/error-propagation.js)
+- when making synchronous operations, we should use traditional `try catch` instructions to catch the error
+- invoking the callback inside a `try` block would catch any error thrown from the execution of the callback, and we do not want that
+- with *uncaught errors*, it is better to stop running the application, and ideally, a supervising process should restart the app being ran… it is knowns as the **fail-fast** approach
+
+## The Observer pattern
+The `EventEmitter` class already exists in node.js, which allows us to register one or more function as a listener, which will be invoked when a certain type of event is fired, so… there could be a lot be more than one *emitter*, and there could be more than one *listener* to each emitter. We use the class like this
+
+```js
+import { eventEmitter } from 'events'
+const emitter = new EventEmitter()
+```
+
+here are some useful methods:
+- `on(event, listener)` this allows us to register a new listener
+- `once(event, listener)` this register a new listener that will be remove after being used once
+- `emit(event. [arg1], [...])` creates a new event and lets us pass arguments to the listener
+- `‌removeListener(event, listener)` removes a listener from an emitter
+
+These will return the `EventEmitter` instance to allow chaining.
+
+[Here](./chapter3/event-emitter-example.js) is a pract
+
+> The EventEmitter treats the error event in a special way. It will automatically throw an exception and exit from the application if such an event is emitted and no associated listener is found. For this reason, it is recommended to always register a listener for the error event.
 
