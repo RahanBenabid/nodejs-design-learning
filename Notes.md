@@ -819,3 +819,28 @@ These will return the `EventEmitter` instance to allow chaining.
 
 > The EventEmitter treats the error event in a special way. It will automatically throw an exception and exit from the application if such an event is emitted and no associated listener is found. For this reason, it is recommended to always register a listener for the error event.
 
+The most common way `EventEmiiter` is used is by extending it by other classes, [here](./chapter3/observable-object.js) is a practical example… Now classes would also provide the `on` method.
+
+This can be useful is cases like inheriting from the `Server` object in the core `http` module, where you can create methods like `request` that triggers when a new request is received, same for `connection` or `closed`.
+
+it is very important to **unsubscribe** our listeners once they’re no longer needed to not cause ‌**memory leaks**, here is a real example:
+
+```js
+const thisTakesMemory = 'A big string...'
+const listener = () => {
+	console.log(thisTakesMemory)
+}
+emitter.on(<event_name>, listener)
+```
+
+These unrealeased `EventEmitters` are the most common source of memeory leaks in Node.js, to avoid that we simply use this method:
+
+```js
+emitter.removeListner(<event_name>, listener)
+```
+
+> It has a build in mechanism to warn devs, after listeners have been registered (by default) 10 times, then the `EventEmitter` will produce a warning.
+
+## EventEmitter VS Callbacks
+- use callbacks when a result needs to be returned in a *asynchronous way*
+- event should be used when there is a need to communicate that something happened
