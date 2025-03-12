@@ -15,5 +15,4 @@ find everything inside the [Notes.md](https://github.com/RahanBenabid/nodejs-des
 
 ```sh
    git clone https://github.com/RahanBenabid/nodejs-design-patterns-learning
-```<!---
-[]-->
+```
