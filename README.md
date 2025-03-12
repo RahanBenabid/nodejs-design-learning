@@ -9,7 +9,7 @@ This is an open repo that contains what I have learned about node.js over the pa
 - Optimisation tricks
 - Example application with comments
 
-find everything inside the [Notes.md](https://github.com/RahanBenabid/nodejs-design-patterns-learning/blob/main/node-design-pattern/Notes.md) and [notes.md](https://github.com/RahanBenabid/nodejs-design-patterns-learning/blob/main/Node-JS-Advanced-Concepts/Notes.md) files, simplified as much as possible.
+find everything inside the [Notes.md](https://github.com/RahanBenabid/nodejs-design-learning/blob/main/node-design-pattern/Notes.md) and [notes.md](https://github.com/RahanBenabid/nodejs-design-learning/blob/main/Node-JS-Advanced-Concepts/notes.md) files, simplified as much as possible.
 
 ## Clone this repository:
 
